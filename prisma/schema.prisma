@@ -1,0 +1,174 @@
+datasource db {
+  provider = "postgresql" 
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String   @unique
+  password  String?  
+  // MUDANÇA: Adicionado @db.Text para suportar anexo de fotos em Base64
+  image     String?  @default("https://i.imgur.com/8Q5uO5X.png") @db.Text
+  status    String?  @default("Codar o Orkut é como viajar no tempo, mas sem o risco de encontrar o seu eu do passado.")
+  createdAt DateTime @default(now())
+  
+  // --- AVALIAÇÕES (SELINHOS) ---
+  trusty    Int @default(0) // Confiável (Gelo)
+  cool      Int @default(0) // Legal (Smile)
+  sexy      Int @default(0) // Sexy (Coração)
+
+  // --- RELAÇÕES ---
+  
+  // Mural de Recados (Scraps)
+  sentScraps     Scrap[] @relation("SentScraps")
+  receivedScraps Scrap[] @relation("ReceivedScraps")
+
+  // Amizades
+  sentRequests     Friendship[] @relation("SentFriendships")
+  receivedRequests Friendship[] @relation("ReceivedFriendships")
+
+  // Visitas
+  visits           Visit[]      @relation("ProfileVisits")
+
+  // Galeria de Fotos
+  albums           Album[]
+  photoComments    PhotoComment[]
+
+  // Depoimentos
+  testimonialsSent     Testimonial[] @relation("SentTestimonials")
+  testimonialsReceived Testimonial[] @relation("ReceivedTestimonials")
+
+  // --- COMUNIDADES ---
+  ownedCommunities    Community[] @relation("OwnedCommunities")
+  communities         Community[] @relation("CommunityMembers")
+  topicsCreated       Topic[]
+  repliesCreated      Reply[]
+}
+
+model Scrap {
+  id          String   @id @default(cuid())
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+
+  // Quem escreveu
+  authorId    String
+  author      User     @relation("SentScraps", fields: [authorId], references: [id], onDelete: Cascade)
+  
+  // No perfil de quem (Mural)
+  recipientId String
+  recipient   User     @relation("ReceivedScraps", fields: [recipientId], references: [id], onDelete: Cascade)
+}
+
+model Friendship {
+  id          String   @id @default(cuid())
+  senderEmail String
+  sender      User     @relation("SentFriendships", fields: [senderEmail], references: [email])
+  receiverId  String
+  receiver    User     @relation("ReceivedFriendships", fields: [receiverId], references: [id])
+  accepted    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@unique([senderEmail, receiverId])
+}
+
+model Visit {
+  id          String   @id @default(cuid())
+  visitorId   String
+  visitorName String
+  visitorImg  String?
+  profileId   String
+  visitedAt   DateTime @default(now())
+
+  profile      User     @relation("ProfileVisits", fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+// --- FOTOS ---
+
+model Album {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photos      Photo[]
+  createdAt   DateTime @default(now())
+}
+
+model Photo {
+  id          String         @id @default(cuid())
+  url         String         @db.Text // Também adicionado @db.Text para fotos da galeria
+  description String?
+  albumId     String
+  album       Album          @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  comments    PhotoComment[]
+  createdAt   DateTime       @default(now())
+}
+
+model PhotoComment {
+  id        String   @id @default(cuid())
+  content   String
+  photoId   String
+  photo     Photo    @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+// --- DEPOIMENTOS ---
+
+model Testimonial {
+  id          String   @id @default(cuid())
+  content     String   @db.Text
+  authorId    String
+  authorName  String
+  authorImage String?
+  profileId   String
+  accepted    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  author      User     @relation("SentTestimonials", fields: [authorId], references: [id], onDelete: Cascade)
+  profile     User     @relation("ReceivedTestimonials", fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+// --- COMUNIDADES ---
+
+model Community {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  image       String?  @default("https://i.imgur.com/8Q5uO5X.png") @db.Text
+  ownerId     String
+  createdAt   DateTime @default(now())
+
+  owner       User     @relation("OwnedCommunities", fields: [ownerId], references: [id])
+  members     User[]   @relation("CommunityMembers")
+  topics      Topic[]
+}
+
+model Topic {
+  id          String   @id @default(cuid())
+  title       String
+  authorId    String
+  communityId String
+  createdAt   DateTime @default(now())
+
+  author      User      @relation(fields: [authorId], references: [id])
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  replies     Reply[]
+}
+
+model Reply {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  authorId  String
+  topicId   String
+  createdAt DateTime @default(now())
+
+  author    User     @relation(fields: [authorId], references: [id])
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+}
